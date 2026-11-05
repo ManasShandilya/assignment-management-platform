@@ -1,0 +1,195 @@
+generator client { provider = "prisma-client-js" }
+datasource db { provider = "postgresql"; url = env("DATABASE_URL") }
+
+enum Role { FACULTY STUDENT }
+enum AssignmentStatus { DRAFT PUBLISHED }
+enum Visibility { CLASS INDIVIDUAL }
+enum SubmissionStatus { SUBMITTED RETURNED EVALUATED }
+enum NotificationType {
+  NEW_SUBMISSION LATE_SUBMISSION RESUBMISSION DEADLINE_APPROACHING
+  NEW_ASSIGNMENT SUBMISSION_CONFIRMED MARKS_PUBLISHED FEEDBACK_RECEIVED SUBMISSION_RETURNED
+}
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  passwordHash   String
+  role           Role
+  name           String
+  avatarPath     String?
+  sessionVersion Int      @default(0) // bump to invalidate every existing JWT
+  createdAt      DateTime @default(now())
+  student        Student?
+  faculty        Faculty?
+  notifications  Notification[]
+  resetTokens    PasswordResetToken[]
+}
+
+model Course {
+  id       String    @id @default(cuid())
+  code     String    @unique
+  name     String
+  sections Section[]
+  assignments Assignment[]
+  subjects FacultySubject[]
+}
+
+model Section {
+  id        String   @id @default(cuid())
+  name      String
+  semester  Int
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id])
+  students  Student[]
+  assignments Assignment[]
+  subjects  FacultySubject[]
+  @@unique([courseId, name, semester])
+}
+
+model Student {
+  id        String  @id @default(cuid())
+  userId    String  @unique
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  regNo     String  @unique
+  program   String
+  branch    String
+  semester  Int
+  sectionId String
+  section   Section @relation(fields: [sectionId], references: [id])
+  submissions Submission[]
+  targets   AssignmentTarget[]
+}
+
+model Faculty {
+  id          String @id @default(cuid())
+  userId      String @unique
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  facultyCode String @unique
+  department  String
+  designation String
+  subjects    FacultySubject[]
+  assignments Assignment[]
+}
+
+// Defines which course + section a faculty member may manage
+model FacultySubject {
+  id        String  @id @default(cuid())
+  facultyId String
+  courseId  String
+  sectionId String
+  faculty   Faculty @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  course    Course  @relation(fields: [courseId], references: [id])
+  section   Section @relation(fields: [sectionId], references: [id])
+  @@unique([facultyId, courseId, sectionId])
+}
+
+model Assignment {
+  id              String           @id @default(cuid())
+  facultyId       String
+  courseId        String
+  sectionId       String
+  title           String
+  description     String
+  instructions    String?
+  deadline        DateTime
+  maxMarks        Int
+  allowedFormats  String[]         // subset of: pdf, doc, docx, ppt, pptx
+  maxFileSizeMb   Int              @default(10)
+  allowMultiple   Boolean          @default(false)
+  allowResubmission Boolean        @default(false)
+  allowLate       Boolean          @default(false)
+  latePenaltyPct  Int              @default(0)
+  visibility      Visibility       @default(CLASS)
+  status          AssignmentStatus @default(DRAFT)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  faculty         Faculty          @relation(fields: [facultyId], references: [id])
+  course          Course           @relation(fields: [courseId], references: [id])
+  section         Section          @relation(fields: [sectionId], references: [id])
+  attachments     AssignmentAttachment[]
+  targets         AssignmentTarget[]
+  submissions     Submission[]
+  @@index([facultyId])
+  @@index([sectionId, status])
+}
+
+// Only used when visibility = INDIVIDUAL
+model AssignmentTarget {
+  assignmentId String
+  studentId    String
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  student      Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  @@id([assignmentId, studentId])
+}
+
+model AssignmentAttachment {
+  id           String     @id @default(cuid())
+  assignmentId String
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  storageKey   String
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  isReference  Boolean    @default(false) // false = question paper, true = reference material
+}
+
+model Submission {
+  id           String           @id @default(cuid())
+  assignmentId String
+  studentId    String
+  version      Int              @default(1)
+  status       SubmissionStatus @default(SUBMITTED)
+  submittedAt  DateTime         @default(now()) // always set on the server
+  isLate       Boolean          @default(false)
+  assignment   Assignment       @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  student      Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  files        SubmissionFile[]
+  evaluation   Evaluation?
+  @@unique([assignmentId, studentId, version])
+  @@index([studentId])
+}
+
+model SubmissionFile {
+  id           String     @id @default(cuid())
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  storageKey   String
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+}
+
+model Evaluation {
+  id           String     @id @default(cuid())
+  submissionId String     @unique
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  marks        Float?     // final marks after any late penalty; null for a return-for-correction note
+  rawMarks     Float?     // marks as entered by faculty, before the penalty
+  penaltyPct   Int        @default(0)
+  feedback     String?
+  remarks      String?    // faculty-only internal remarks, never sent to students
+  published    Boolean    @default(false)
+  evaluatedAt  DateTime   @default(now())
+  publishedAt  DateTime?
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  message   String
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+  @@index([userId, readAt])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+}
