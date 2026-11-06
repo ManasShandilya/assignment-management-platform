@@ -2,7 +2,6 @@
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card } from "@/components/ui/card";
 
-export const CHART_COLORS = { accent: "#3B6FE0", green: "#1F9D61", red: "#D64545", yellow: "#C98A0B", gray: "#C5CDDB" };
 
 function Frame({ title, empty, children }: { title: string; empty: boolean; children: React.ReactNode }) {
   return (
