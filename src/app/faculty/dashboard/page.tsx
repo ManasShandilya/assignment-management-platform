@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BookOpenCheck, CheckCircle2, ClipboardList, Clock, Hourglass, TriangleAlert, Users } from "lucide-react";
-import { BarCard, CHART_COLORS, DonutCard } from "@/components/charts/charts";
+import { BarCard, DonutCard } from "@/components/charts/charts";
+import { CHART_COLORS } from "@/components/charts/chart-colors";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { LocalTime } from "@/components/ui/local-time";

@@ -1,4 +1,5 @@
-import { BarCard, CHART_COLORS } from "@/components/charts/charts";
+import { BarCard } from "@/components/charts/charts";
+import { CHART_COLORS } from "@/components/charts/chart-colors";
 import { Card } from "@/components/ui/card";
 import { currentFaculty } from "@/lib/faculty";
 import { loadFacultyStats } from "@/lib/faculty-stats";
